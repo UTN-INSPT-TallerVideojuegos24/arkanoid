@@ -18,11 +18,22 @@ struct Brick {
  * Indica si el juego está en pausa, se modifica en un evento
  */
 bool esta_pausado = true;
+bool es_reset = false;
 
 void leer_eventos(RenderWindow &ventana);
 
 enum borde_t { SUPERIOR, INFERIOR, IZQUIERDO, DERECHO };
 bool colision_con_ventana(Sprite &s, borde_t borde);
+
+void cargar_textura(Texture &texture, string path);
+void inicializar_pelota(Sprite &pelota, Texture &ark_texture);
+void inicializar_bloques(Brick bricks[][BRICK_LINE], Texture &ark_texture);
+void inicializar_jugador(Sprite &jugador, Texture &ark_texture);
+void inicializar_leyenda(Sprite &leyenda, Texture &tex_leyendas,
+                         IntRect recorte);
+void inicializar_sonido(string path, SoundBuffer &buff, Sound &sound,
+                        float volume);
+void inicializar_musica(string path, Music &musica, float volumen, bool loop);
 
 int main() {
   srand(time(NULL));
@@ -33,138 +44,59 @@ int main() {
 
   // Texturas del Arkanoid (ladrillos, pelota y jugador)
   Texture ark_texture;
-  if (!ark_texture.loadFromFile(ASSETS_PATH + ARK_TEXTURES)) {
-    cerr << "No se pudieron cargar las texturas... cerrando el programa."
-         << endl;
-    exit(-1);
-  }
-  /* Se instancia la pelota, esta está escalada según la preferencia
-   * en PLY_BLL_SCALE.
-   */
-  Sprite ball(ark_texture);
-  ball.setTextureRect(
-      IntRect(BALL_OFFSET.x, BALL_OFFSET.y, BALL_SIZE.x, BALL_SIZE.y));
-  ball.setOrigin(BALL_SIZE / 2.f);
-  ball.setPosition(ANCHO_VENT / 2.f,
-                   ALTO_VENT - (PLYR_SIZE.y + BALL_SIZE.y) * PLY_BLL_SCALE);
-  ball.setScale({PLY_BLL_SCALE, PLY_BLL_SCALE});
-
-  /* Se instancian las matriz de bloques a destruir, estos tienen diferentes
-   * niveles, es decir, que deben ser golpeados más veces para desaparecer.
-   */
-  Brick bricks[BRICK_LINE][BRICK_LINE];
-  for (int i = 0; i < BRICK_ROWS; i++) {
-    for (int j = 0; j < BRICK_LINE; j++) {
-      bricks[i][j].spr.setTexture(ark_texture);
-      bricks[i][j].spr.setTextureRect(IntRect(BRICK_SIZE.x * (i / 3),
-                                              BRICK_SIZE.y * (i % 3),
-                                              BRICK_SIZE.x, BRICK_SIZE.y));
-      bricks[i][j].lvl = (BRICK_ROWS - 1) - i;
-      bricks[i][j].spr.setPosition(
-          {BRICK_SIZE.x * j, TOP_GAP + BRICK_SIZE.y * i});
-      bricks[i][j].esta_destruido = false;
-    }
-  }
-  /*
-   * Jugador, es la paleta
-   */
-  Sprite player(ark_texture);
-  player.setTextureRect(
-      IntRect(PLYR_OFFSET.x, PLYR_OFFSET.y, PLYR_SIZE.x, PLYR_SIZE.y));
-  player.setOrigin(PLYR_SIZE.x / 2.f, PLYR_SIZE.y / 2.f);
-  player.setPosition(ANCHO_VENT / 2.f,
-                     ALTO_VENT - (PLYR_SIZE.y * PLY_BLL_SCALE));
-  player.setScale({PLY_BLL_SCALE, PLY_BLL_SCALE});
-
-  /*
-   * Textura que tiene las plcas de: Perdiste, Ganaste y Pausa
-   */
+  cargar_textura(ark_texture, ASSETS_PATH + ARK_TEXTURES);
+  // Texturas de Pausa, Ganaste y Perdiste
   Texture tex_leyendas;
-  if (!tex_leyendas.loadFromFile(ASSETS_PATH + LYND_TEXTURES)) {
-    cerr << "No se pudieron cargar las texturas... cerrando el programa."
-         << endl;
-    exit(-1);
-  }
-  /*
-   * Leyenda: Perdiste
-   */
-  Sprite perdiste(tex_leyendas);
-  perdiste.setTextureRect(IntRect(PERDISTE_OFFSET.x, PERDISTE_OFFSET.y,
-                                  PERDISTE_SIZE_X, LYN_OFFSET_Y));
-  perdiste.setOrigin({perdiste.getGlobalBounds().width / 2.f,
-                      perdiste.getGlobalBounds().height / 2.f});
-  perdiste.setPosition({ANCHO_VENT / 2.f, ALTO_VENT / 4.f});
-  /*
-   * Leyenda: Ganaste
-   */
-  Sprite ganaste(tex_leyendas);
-  ganaste.setTextureRect(IntRect(GANASTE_OFFSET.x, GANASTE_OFFSET.y,
-                                 GANASTE_SIZE_X, LYN_OFFSET_Y));
-  ganaste.setOrigin({ganaste.getGlobalBounds().width / 2.f,
-                     ganaste.getGlobalBounds().height / 2.f});
-  ganaste.setPosition({ANCHO_VENT / 2.f, ALTO_VENT / 4.f});
-  /*
-   * Leyenda: Pausa
-   */
-  Sprite pausa(tex_leyendas);
-  pausa.setTextureRect(
+  cargar_textura(tex_leyendas, ASSETS_PATH + LYND_TEXTURES);
+
+  Brick bricks[BRICK_ROWS][BRICK_LINE];
+  inicializar_bloques(bricks, ark_texture);
+  Sprite ball;
+  inicializar_pelota(ball, ark_texture);
+  Sprite player;
+  inicializar_jugador(player, ark_texture);
+
+  Sprite perdiste;
+  inicializar_leyenda(perdiste, tex_leyendas,
+                      IntRect(PERDISTE_OFFSET.x, PERDISTE_OFFSET.y,
+                              PERDISTE_SIZE_X, LYN_OFFSET_Y));
+  Sprite ganaste;
+  inicializar_leyenda(ganaste, tex_leyendas,
+                      IntRect(GANASTE_OFFSET.x, GANASTE_OFFSET.y,
+                              GANASTE_SIZE_X, LYN_OFFSET_Y));
+  Sprite pausa;
+  inicializar_leyenda(
+      pausa, tex_leyendas,
       IntRect(PAUSA_OFFSET.x, PAUSA_OFFSET.y, PAUSA_SIZE_X, LYN_OFFSET_Y));
-  pausa.setOrigin({pausa.getGlobalBounds().width / 2.f,
-                   pausa.getGlobalBounds().height / 2.f});
-  pausa.setPosition({ANCHO_VENT / 2.f, ALTO_VENT / 4.f});
-  bool esta_finalizado = false, es_ganador = false;
-  /*
-   * Sonidos del juego, rebote, pausa y perdiste
-   */
+
   SoundBuffer sbuffrebote;
   Sound rebote_sound;
-  if (!sbuffrebote.loadFromFile(ASSETS_PATH + SND_REBOTE)) {
-    cerr << "No se pudo cargar sonido de rebote..." << endl;
-  } else {
-    rebote_sound.setBuffer(sbuffrebote);
-    rebote_sound.setVolume(VOLUMEN_FX);
-  }
-
+  inicializar_sonido(ASSETS_PATH + SND_REBOTE, sbuffrebote, rebote_sound,
+                     VOLUMEN_FX);
   SoundBuffer sbuffperdiste;
   Sound perdiste_sound;
-  if (!sbuffperdiste.loadFromFile(ASSETS_PATH + SND_PERDISTE)) {
-    cerr << "No se pudo cargar sonido de perdiste..." << endl;
-  } else {
-    perdiste_sound.setBuffer(sbuffperdiste);
-    perdiste_sound.setVolume(VOLUMEN_FX);
-  }
-
+  inicializar_sonido(ASSETS_PATH + SND_PERDISTE, sbuffperdiste, perdiste_sound,
+                     VOLUMEN_FX);
   SoundBuffer sbuffpausa;
   Sound pausa_sound;
-  if (!sbuffpausa.loadFromFile(ASSETS_PATH + SND_PAUSA)) {
-    cerr << "No se pudo cargar sonido de pausa..." << endl;
-  } else {
-    pausa_sound.setBuffer(sbuffpausa);
-    pausa_sound.setVolume(VOLUMEN_FX / 4.f);
-  }
-  /*
-   * Música del juego
-   */
-  Music m;
-  if (!m.openFromFile(ASSETS_PATH + MUSIC)) {
-    cerr << "No se pudo cargar la música..." << endl;
-  } else {
-    m.setLoop(true);
-    m.setVolume(VOLUMEN_MUSICA);
-    m.play();
-  }
+  inicializar_sonido(ASSETS_PATH + SND_PAUSA, sbuffpausa, pausa_sound,
+                     VOLUMEN_FX * .25f);
+  Music music;
+  inicializar_musica(ASSETS_PATH + MUSIC, music, VOLUMEN_MUSICA, true);
+
   // ángulo en el que se desplaza la pelota.
   float angulo_mov = M_PI_4 - rand() * M_PI_4 * pow(-1, rand() % 2);
   // movimiento de la pelota (inicial random)
   Vector2f diff = {cosf(angulo_mov) * VELOCIDAD,
                    -abs(sinf(angulo_mov) * VELOCIDAD)};
-  
+
   // Normalización del ángulo para cuando la pelota toca al jugador.
   const float NORM = (player.getGlobalBounds().height / 2.f);
-  
+
   // Cantidad de bloques restantes (cuando es 0 ganaste)
   size_t bloques_restantes = CANT_BRICKS;
-  
+
+  bool esta_finalizado = false, es_ganador = false;
   // para indicar si se puso o salio de pausa y reproducir el sonido
   bool last_pausa = esta_pausado;
   while (ventana.isOpen()) {
@@ -191,8 +123,9 @@ int main() {
       } else if (colision_con_ventana(player, DERECHO)) {
         player.move({-VELOCIDAD, 0});
       }
-      
+
       // Detección de colisiones de la pelota con el jugador:
+      
       if (player.getGlobalBounds().intersects(ball.getGlobalBounds())) {
         rebote_sound.play();
         angulo_mov =
@@ -201,7 +134,7 @@ int main() {
                 ((ball.getPosition().x - player.getPosition().x) / NORM);
         diff = {cosf(angulo_mov) * VELOCIDAD,
                 -abs(sinf(angulo_mov) * VELOCIDAD)};
-      } else { 
+      } else {
         // Detección de colisiones de la pelota con los bordes de la ventana
         bool esta_rebotando = false;
         if (colision_con_ventana(ball, IZQUIERDO)) {
@@ -338,4 +271,76 @@ bool colision_con_ventana(Sprite &s, borde_t borde) {
     return (s.getGlobalBounds().left + s.getGlobalBounds().width) >= ANCHO_VENT;
   }
   return false;
+}
+
+void cargar_textura(Texture &texture, string path) {
+  if (!texture.loadFromFile(path)) {
+    cerr << "No se pudieron cargar las texturas '" << path
+         << "' cerrando el programa." << endl;
+    exit(-1);
+  }
+}
+
+void inicializar_bloques(Brick bricks[][BRICK_LINE], Texture &ark_texture) {
+  for (int i = 0; i < BRICK_ROWS; i++) {
+    for (int j = 0; j < BRICK_LINE; j++) {
+      bricks[i][j].spr.setTexture(ark_texture);
+      bricks[i][j].spr.setTextureRect(IntRect(BRICK_SIZE.x * (i / 3),
+                                              BRICK_SIZE.y * (i % 3),
+                                              BRICK_SIZE.x, BRICK_SIZE.y));
+      bricks[i][j].lvl = (BRICK_ROWS - 1) - i;
+      bricks[i][j].spr.setPosition(
+          {BRICK_SIZE.x * j, TOP_GAP + BRICK_SIZE.y * i});
+      bricks[i][j].esta_destruido = false;
+    }
+  }
+}
+
+void inicializar_pelota(Sprite &pelota, Texture &ark_texture) {
+  pelota.setTexture(ark_texture);
+  pelota.setTextureRect(
+      IntRect(BALL_OFFSET.x, BALL_OFFSET.y, BALL_SIZE.x, BALL_SIZE.y));
+  pelota.setOrigin(BALL_SIZE / 2.f);
+  pelota.setPosition(ANCHO_VENT / 2.f,
+                     ALTO_VENT - (PLYR_SIZE.y + BALL_SIZE.y) * PLY_BLL_SCALE);
+  pelota.setScale({PLY_BLL_SCALE, PLY_BLL_SCALE});
+}
+
+void inicializar_jugador(Sprite &jugador, Texture &ark_texture) {
+  jugador.setTexture(ark_texture);
+  jugador.setTextureRect(
+      IntRect(PLYR_OFFSET.x, PLYR_OFFSET.y, PLYR_SIZE.x, PLYR_SIZE.y));
+  jugador.setOrigin(PLYR_SIZE.x / 2.f, PLYR_SIZE.y / 2.f);
+  jugador.setPosition(ANCHO_VENT / 2.f,
+                      ALTO_VENT - (PLYR_SIZE.y * PLY_BLL_SCALE));
+  jugador.setScale({PLY_BLL_SCALE, PLY_BLL_SCALE});
+}
+
+void inicializar_leyenda(Sprite &leyenda, Texture &tex_leyendas,
+                         IntRect recorte) {
+  leyenda.setTexture(tex_leyendas);
+  leyenda.setTextureRect(recorte);
+  leyenda.setOrigin({leyenda.getGlobalBounds().width / 2.f,
+                     leyenda.getGlobalBounds().height / 2.f});
+  leyenda.setPosition({ANCHO_VENT / 2.f, ALTO_VENT / 4.f});
+}
+
+void inicializar_sonido(string path, SoundBuffer &buff, Sound &sound,
+                        float volume) {
+  if (!buff.loadFromFile(path)) {
+    cerr << "No se pudo cargar sonido " << path << " ..." << endl;
+  } else {
+    sound.setBuffer(buff);
+    sound.setVolume(volume);
+  }
+}
+
+void inicializar_musica(string path, Music &musica, float volumen, bool loop) {
+  if (!musica.openFromFile(path)) {
+    cerr << "No se pudo cargar la música " << path << "..." << endl;
+  } else {
+    musica.setLoop(loop);
+    musica.setVolume(volumen);
+    musica.play();
+  }
 }
