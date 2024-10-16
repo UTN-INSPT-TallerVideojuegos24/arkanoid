@@ -18,7 +18,6 @@ struct Brick {
  * Indica si el juego está en pausa, se modifica en un evento
  */
 bool esta_pausado = true;
-bool es_reset = false;
 
 void leer_eventos(RenderWindow &ventana);
 
@@ -91,7 +90,7 @@ int main() {
                    -abs(sinf(angulo_mov) * VELOCIDAD)};
 
   // Normalización del ángulo para cuando la pelota toca al jugador.
-  const float NORM = (player.getGlobalBounds().height / 2.f);
+  const float NORM = (player.getGlobalBounds().width / 2.f);
 
   // Cantidad de bloques restantes (cuando es 0 ganaste)
   size_t bloques_restantes = CANT_BRICKS;
@@ -125,12 +124,12 @@ int main() {
       }
 
       // Detección de colisiones de la pelota con el jugador:
-      
       if (player.getGlobalBounds().intersects(ball.getGlobalBounds())) {
         rebote_sound.play();
+        // para evitar el ángulo 0 le podemos restar hasta el 85% del PI/2
         angulo_mov =
             M_PI_2 -
-            (M_PI_4 / 3.f) *
+            (M_PI_2 * .85f) *
                 ((ball.getPosition().x - player.getPosition().x) / NORM);
         diff = {cosf(angulo_mov) * VELOCIDAD,
                 -abs(sinf(angulo_mov) * VELOCIDAD)};
